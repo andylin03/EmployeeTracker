@@ -21,87 +21,87 @@ connection.connect((error) => {
 // Prompt User for Choices
 const promptUser = () => {
   inquirer.prompt([
-      {
-        name: 'choices',
-        type: 'list',
-        message: 'Please select an option:',
-        choices: [
-          'View All Employees',
-          'View All Roles',
-          'View All Departments',
-          'View All Employees By Department',
-          'View Department Budgets',
-          'Update Employee Role',
-          'Update Employee Manager',
-          'Add Employee',
-          'Add Role',
-          'Add Department',
-          'Remove Employee',
-          'Remove Role',
-          'Remove Department',
-          'Exit'
-          ]
-      }
-    ])
+    {
+      name: 'choices',
+      type: 'list',
+      message: 'Please select an option:',
+      choices: [
+        'View All Employees',
+        'View All Roles',
+        'View All Departments',
+        'View All Employees By Department',
+        'View Department Budgets',
+        'Update Employee Role',
+        'Update Employee Manager',
+        'Add Employee',
+        'Add Role',
+        'Add Department',
+        'Remove Employee',
+        'Remove Role',
+        'Remove Department',
+        'Exit'
+      ]
+    }
+  ])
     .then((answers) => {
-      const {choices} = answers;
+      const { choices } = answers;
 
-        if (choices === 'View All Employees') {
-            viewAllEmployees();
-        }
-
-        if (choices === 'View All Departments') {
-          viewAllDepartments();
+      if (choices === 'View All Employees') {
+        viewAllEmployees();
       }
 
-        if (choices === 'View All Employees By Department') {
-            viewEmployeesByDepartment();
-        }
+      if (choices === 'View All Departments') {
+        viewAllDepartments();
+      }
 
-        if (choices === 'Add Employee') {
-            addEmployee();
-        }
+      if (choices === 'View All Employees By Department') {
+        viewEmployeesByDepartment();
+      }
 
-        if (choices === 'Remove Employee') {
-            removeEmployee();
-        }
+      if (choices === 'Add Employee') {
+        addEmployee();
+      }
 
-        if (choices === 'Update Employee Role') {
-            updateEmployeeRole();
-        }
+      if (choices === 'Remove Employee') {
+        removeEmployee();
+      }
 
-        if (choices === 'Update Employee Manager') {
-            updateEmployeeManager();
-        }
+      if (choices === 'Update Employee Role') {
+        updateEmployeeRole();
+      }
 
-        if (choices === 'View All Roles') {
-            viewAllRoles();
-        }
+      if (choices === 'Update Employee Manager') {
+        updateEmployeeManager();
+      }
 
-        if (choices === 'Add Role') {
-            addRole();
-        }
+      if (choices === 'View All Roles') {
+        viewAllRoles();
+      }
 
-        if (choices === 'Remove Role') {
-            removeRole();
-        }
+      if (choices === 'Add Role') {
+        addRole();
+      }
 
-        if (choices === 'Add Department') {
-            addDepartment();
-        }
+      if (choices === 'Remove Role') {
+        removeRole();
+      }
 
-        if (choices === 'View Department Budgets') {
-            viewDepartmentBudget();
-        }
+      if (choices === 'Add Department') {
+        addDepartment();
+      }
 
-        if (choices === 'Remove Department') {
-            removeDepartment();
-        }
+      if (choices === 'View Department Budgets') {
+        viewDepartmentBudget();
+      }
 
-        if (choices === 'Exit') {
-            connection.end();
-        }
-  });
+      if (choices === 'Remove Department') {
+        removeDepartment();
+      }
+
+      if (choices === 'Exit') {
+        connection.end();
+      }
+    });
 };
 
 // ----------------------------------------------------- VIEW -----------------------------------------------------------------------
@@ -202,76 +202,43 @@ const viewDepartmentBudget = () => {
 const addEmployee = () => {
   inquirer.prompt([
     {
+      name: 'first_name',
       type: 'input',
-      name: 'fistName',
       message: "What is the employee's first name?",
-      validate: addFirstName => {
-        if (addFirstName) {
-            return true;
-        } else {
-            console.log('Please enter a first name');
-            return false;
-        }
-      }
+      validate: validate.validateString
     },
     {
+      name: 'last_name',
       type: 'input',
-      name: 'lastName',
       message: "What is the employee's last name?",
-      validate: addLastName => {
-        if (addLastName) {
-            return true;
-        } else {
-            console.log('Please enter a last name');
-            return false;
-        }
-      }
+      validate: validate.validateString
+    },
+    {
+      name: 'role_id',
+      type: 'input',
+      message: "What is the employee's role ID?",
+      validate: validate.validateNumber
+    },
+    {
+      name: 'manager_id',
+      type: 'input',
+      message: "What is the employee's manager ID?",
+      validate: validate.validateNumber
     }
   ])
-    .then(answer => {
-    const crit = [answer.fistName, answer.lastName]
-    const roleSql = `SELECT role.id, role.title FROM role`;
-    connection.promise().query(roleSql, (error, data) => {
-      if (error) throw error; 
-      const roles = data.map(({ id, title }) => ({ name: title, value: id }));
-      inquirer.prompt([
-            {
-              type: 'list',
-              name: 'role',
-              message: "What is the employee's role?",
-              choices: roles
-            }
-          ])
-            .then(roleChoice => {
-              const role = roleChoice.role;
-              crit.push(role);
-              const managerSql =  `SELECT * FROM employee`;
-              connection.promise().query(managerSql, (error, data) => {
-                if (error) throw error;
-                const managers = data.map(({ id, first_name, last_name }) => ({ name: first_name + " "+ last_name, value: id }));
-                inquirer.prompt([
-                  {
-                    type: 'list',
-                    name: 'manager',
-                    message: "Who is the employee's manager?",
-                    choices: managers
-                  }
-                ])
-                  .then(managerChoice => {
-                    const manager = managerChoice.manager;
-                    crit.push(manager);
-                    const sql =   `INSERT INTO employee (first_name, last_name, role_id, manager_id)
-                                  VALUES (?, ?, ?, ?)`;
-                    connection.query(sql, crit, (error) => {
-                    if (error) throw error;
-                    console.log("Employee has been added!")
-                    viewAllEmployees();
-              });
-            });
-          });
-        });
-     });
-  });
+    .then((answers) => {
+      const { first_name, last_name, role_id, manager_id } = answers;
+
+      const sql = `INSERT INTO employee (first_name, last_name, role_id, manager_id)
+                    VALUES (?, ?, ?, ?)`;
+      const values = [first_name, last_name, role_id, manager_id];
+
+      connection.query(sql, values, (error, response) => {
+        if (error) throw error;
+        console.log('Employee added successfully!\n');
+        viewAllEmployees();
+      });
+    });
 };
 
 // Add a New Role
@@ -611,3 +578,9 @@ const removeDepartment = () => {
         });
     });
 };
+
+// Starts the server to begin listening
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
+  console.log(`App listening on PORT ${PORT}`);
+});
