@@ -1,9 +1,22 @@
-const connection = require('./config/connection');
+const mysql = require('mysql2');
+const express = require('express');
 const inquirer = require('inquirer');
 const cTable = require('console.table');
 const chalk = require('chalk');
 const figlet = require('figlet');
 const validate = require('./javascript/validate');
+
+require('dotenv').config();
+
+const connection = mysql.createConnection({
+  host: '127.0.0.1',
+  port: 3306,
+  user: 'root',
+  password: process.env.MYSQL_PASSWORD,
+  database: 'employees'
+});
+
+const app = express();
 
 // Database Connect and Starter Title
 connection.connect((error) => {
@@ -108,56 +121,92 @@ const promptUser = () => {
 
 // View All Employees
 const viewAllEmployees = () => {
-  let sql =       `SELECT employee.id, 
-                  employee.first_name, 
-                  employee.last_name, 
-                  role.title, 
-                  department.department_name AS 'department', 
-                  role.salary
-                  FROM employee, role, department 
-                  WHERE department.id = role.department_id 
-                  AND role.id = employee.role_id
-                  ORDER BY employee.id ASC`;
-  connection.promise().query(sql, (error, response) => {
-    if (error) throw error;
-    console.log(chalk.yellow.bold(`====================================================================================`));
-    console.log(`                              ` + chalk.green.bold(`Current Employees:`));
-    console.log(chalk.yellow.bold(`====================================================================================`));
-    console.table(response);
-    console.log(chalk.yellow.bold(`====================================================================================`));
-    promptUser();
-  });
+  let sql = `SELECT employee.id,
+                    employee.first_name,
+                    employee.last_name,
+                    role.title,
+                    department.department_name AS department,
+                    role.salary
+              FROM employee
+              JOIN role ON role.id = employee.role_id
+              JOIN department ON department.id = role.department_id
+              ORDER BY employee.id ASC`;
+
+  connection.promise()
+    .query(sql)
+    .then(([rows]) => {
+      const employees = rows.map((row) => ({
+        'Employee ID': row.id,
+        'First Name': row.first_name,
+        'Last Name': row.last_name,
+        'Role': row.title,
+        'Department': row.department,
+        'Salary': row.salary,
+      }));
+
+      console.log(chalk.yellow.bold(`====================================================================================`));
+      console.log(`                              ` + chalk.green.bold(`Current Employees:`));
+      console.log(chalk.yellow.bold(`====================================================================================`));
+      console.table(employees);
+      console.log(chalk.yellow.bold(`====================================================================================`));
+      promptUser();
+    })
+    .catch((error) => {
+      console.error(`Error fetching employees: ${error}`);
+      promptUser();
+    });
 };
+
 
 // View all Roles
 const viewAllRoles = () => {
-  console.log(chalk.yellow.bold(`====================================================================================`));
-  console.log(`                              ` + chalk.green.bold(`Current Employee Roles:`));
-  console.log(chalk.yellow.bold(`====================================================================================`));
-  const sql =     `SELECT role.id, role.title, department.department_name AS department
-                  FROM role
-                  INNER JOIN department ON role.department_id = department.id`;
-  connection.promise().query(sql, (error, response) => {
-    if (error) throw error;
-      response.forEach((role) => {console.log(role.title);});
+  const sql = `SELECT role.id, role.title, department.department_name AS department
+              FROM role
+              INNER JOIN department ON role.department_id = department.id`;
+
+  connection.promise()
+    .query(sql)
+    .then(([rows]) => {
+      const roles = rows.map((row) => ({
+        'Role ID': row.id,
+        'Title': row.title,
+        'Department': row.department,
+      }));
+
+      console.log(chalk.yellow.bold(`====================================================================================`));
+      console.log(`                              ` + chalk.green.bold(`Current Employee Roles:`));
+      console.log(chalk.yellow.bold(`====================================================================================`));
+      console.table(roles);
       console.log(chalk.yellow.bold(`====================================================================================`));
       promptUser();
-  });
+    })
+    .catch((error) => {
+      console.error(`Error fetching roles: ${error}`);
+      promptUser();
+    });
 };
+
+
 
 // View all Departments
 const viewAllDepartments = () => {
-  const sql =   `SELECT department.id AS id, department.department_name AS department FROM department`; 
-  connection.promise().query(sql, (error, response) => {
-    if (error) throw error;
-    console.log(chalk.yellow.bold(`====================================================================================`));
-    console.log(`                              ` + chalk.green.bold(`All Departments:`));
-    console.log(chalk.yellow.bold(`====================================================================================`));
-    console.table(response);
-    console.log(chalk.yellow.bold(`====================================================================================`));
-    promptUser();
-  });
+  const sql = `SELECT department.id AS id, department.department_name AS department FROM department`;
+
+  connection.promise()
+    .query(sql)
+    .then(([response]) => {
+      console.log(chalk.yellow.bold(`====================================================================================`));
+      console.log(`                              ` + chalk.green.bold(`All Departments:`));
+      console.log(chalk.yellow.bold(`====================================================================================`));
+      console.table(response);
+      console.log(chalk.yellow.bold(`====================================================================================`));
+      promptUser();
+    })
+    .catch((error) => {
+      throw error;
+    });
 };
+
 
 // View all Employees by Department
 const viewEmployeesByDepartment = () => {
@@ -243,67 +292,75 @@ const addEmployee = () => {
 
 // Add a New Role
 const addRole = () => {
-  const sql = 'SELECT * FROM department'
-  connection.promise().query(sql, (error, response) => {
-      if (error) throw error;
-      let deptNamesArray = [];
-      response.forEach((department) => {deptNamesArray.push(department.department_name);});
+  const sql = 'SELECT * FROM department';
+  connection.promise()
+    .query(sql)
+    .then(([rows]) => {
+      const deptNamesArray = rows.map((row) => row.department_name);
       deptNamesArray.push('Create Department');
+
       inquirer
         .prompt([
           {
             name: 'departmentName',
             type: 'list',
             message: 'Which department is this new role in?',
-            choices: deptNamesArray
-          }
+            choices: deptNamesArray,
+          },
         ])
         .then((answer) => {
           if (answer.departmentName === 'Create Department') {
-            this.addDepartment();
+            addDepartment();
           } else {
-            addRoleResume(answer);
+            addRoleResume(answer, rows); // Pass the department data as an argument
           }
         });
-
-      const addRoleResume = (departmentData) => {
-        inquirer
-          .prompt([
-            {
-              name: 'newRole',
-              type: 'input',
-              message: 'What is the name of your new role?',
-              validate: validate.validateString
-            },
-            {
-              name: 'salary',
-              type: 'input',
-              message: 'What is the salary of this new role?',
-              validate: validate.validateSalary
-            }
-          ])
-          .then((answer) => {
-            let createdRole = answer.newRole;
-            let departmentId;
-
-            response.forEach((department) => {
-              if (departmentData.departmentName === department.department_name) {departmentId = department.id;}
-            });
-
-            let sql =   `INSERT INTO role (title, salary, department_id) VALUES (?, ?, ?)`;
-            let crit = [createdRole, answer.salary, departmentId];
-
-            connection.promise().query(sql, crit, (error) => {
-              if (error) throw error;
-              console.log(chalk.yellow.bold(`====================================================================================`));
-              console.log(chalk.greenBright(`Role successfully created!`));
-              console.log(chalk.yellow.bold(`====================================================================================`));
-              viewAllRoles();
-            });
-          });
-      };
+    })
+    .catch((error) => {
+      console.error(`Error fetching department data: ${error}`);
+      promptUser();
     });
-  };
+};
+
+const addRoleResume = (departmentData, departments) => {
+  inquirer
+    .prompt([
+      {
+        name: 'newRole',
+        type: 'input',
+        message: 'What is the name of your new role?',
+        validate: validate.validateString,
+      },
+      {
+        name: 'salary',
+        type: 'input',
+        message: 'What is the salary of this new role?',
+        validate: validate.validateSalary,
+      },
+    ])
+    .then((answer) => {
+      const createdRole = answer.newRole;
+      const departmentId = departmentData.departmentName === 'Create Department'
+        ? null
+        : departments.find((row) => row.department_name === departmentData.departmentName).id;
+
+      const sql = 'INSERT INTO role (title, salary, department_id) VALUES (?, ?, ?)';
+      const values = [createdRole, answer.salary, departmentId];
+
+      connection.promise()
+        .query(sql, values)
+        .then(() => {
+          console.log(chalk.greenBright(`Role successfully created!`));
+          viewAllRoles();
+        })
+        .catch((error) => {
+          console.error(`Error creating new role: ${error}`);
+          promptUser();
+        });
+    });
+};
+
+
 
 // Add a New Department
 const addDepartment = () => {
@@ -332,76 +389,67 @@ const addDepartment = () => {
 
 // Update an Employee's Role
 const updateEmployeeRole = () => {
-    let sql =       `SELECT employee.id, employee.first_name, employee.last_name, role.id AS "role_id"
-                    FROM employee, role, department WHERE department.id = role.department_id AND role.id = employee.role_id`;
-    connection.promise().query(sql, (error, response) => {
-      if (error) throw error;
-      let employeeNamesArray = [];
-      response.forEach((employee) => {employeeNamesArray.push(`${employee.first_name} ${employee.last_name}`);});
+  let sql = `SELECT employee.id, employee.first_name, employee.last_name, role.id AS "role_id"
+             FROM employee
+             JOIN role ON role.id = employee.role_id`;
 
-      let sql =     `SELECT role.id, role.title FROM role`;
-      connection.promise().query(sql, (error, response) => {
-        if (error) throw error;
-        let rolesArray = [];
-        response.forEach((role) => {rolesArray.push(role.title);});
+  connection.promise()
+    .query(sql)
+    .then(([rows]) => {
+      const employeeNamesArray = rows.map((row) => `${row.first_name} ${row.last_name}`);
+      const rolesArray = rows.map((row) => row.role_id);
 
-        inquirer
-          .prompt([
-            {
-              name: 'chosenEmployee',
-              type: 'list',
-              message: 'Which employee has a new role?',
-              choices: employeeNamesArray
-            },
-            {
-              name: 'chosenRole',
-              type: 'list',
-              message: 'What is their new role?',
-              choices: rolesArray
-            }
-          ])
-          .then((answer) => {
-            let newTitleId, employeeId;
+      inquirer
+        .prompt([
+          {
+            name: 'chosenEmployee',
+            type: 'list',
+            message: 'Which employee has a new role?',
+            choices: employeeNamesArray,
+          },
+          {
+            name: 'chosenRole',
+            type: 'list',
+            message: 'What is their new role?',
+            choices: rolesArray,
+          },
+        ])
+        .then((answers) => {
+          const { chosenEmployee, chosenRole } = answers;
+          const employeeId = rows.find((row) => `${row.first_name} ${row.last_name}` === chosenEmployee).id;
 
-            response.forEach((role) => {
-              if (answer.chosenRole === role.title) {
-                newTitleId = role.id;
-              }
+          let sql = 'UPDATE employee SET role_id = ? WHERE id = ?';
+
+          connection.promise()
+            .query(sql, [chosenRole, employeeId])
+            .then(() => {
+              console.log(chalk.greenBright.bold(`====================================================================================`));
+              console.log(chalk.greenBright(`Employee Role Updated`));
+              console.log(chalk.greenBright.bold(`====================================================================================`));
+              promptUser();
+            })
+            .catch((error) => {
+              console.error(`Error updating employee role: ${error}`);
+              promptUser();
             });
-
-            response.forEach((employee) => {
-              if (
-                answer.chosenEmployee ===
-                `${employee.first_name} ${employee.last_name}`
-              ) {
-                employeeId = employee.id;
-              }
-            });
-
-            let sqls =    `UPDATE employee SET employee.role_id = ? WHERE employee.id = ?`;
-            connection.query(
-              sqls,
-              [newTitleId, employeeId],
-              (error) => {
-                if (error) throw error;
-                console.log(chalk.greenBright.bold(`====================================================================================`));
-                console.log(chalk.greenBright(`Employee Role Updated`));
-                console.log(chalk.greenBright.bold(`====================================================================================`));
-                promptUser();
-              }
-            );
-          });
-      });
+        });
+    })
+    .catch((error) => {
+      console.error(`Error fetching employee and role data: ${error}`);
+      promptUser();
     });
-  };
+};
+
 
 // Update an Employee's Manager
 const updateEmployeeManager = () => {
-    let sql =       `SELECT employee.id, employee.first_name, employee.last_name, employee.manager_id
-                    FROM employee`;
-     connection.promise().query(sql, (error, response) => {
-      let employeeNamesArray = [];
-      response.forEach((employee) => {employeeNamesArray.push(`${employee.first_name} ${employee.last_name}`);});
+  let sql = `SELECT employee.id, employee.first_name, employee.last_name, employee.manager_id
+             FROM employee`;
+
+  connection.promise()
+    .query(sql)
+    .then(([rows]) => {
+      const employeeNamesArray = rows.map((row) => `${row.first_name} ${row.last_name}`);
 
       inquirer
         .prompt([
@@ -409,65 +457,60 @@ const updateEmployeeManager = () => {
             name: 'chosenEmployee',
             type: 'list',
             message: 'Which employee has a new manager?',
-            choices: employeeNamesArray
+            choices: employeeNamesArray,
           },
           {
             name: 'newManager',
             type: 'list',
             message: 'Who is their manager?',
-            choices: employeeNamesArray
-          }
+            choices: employeeNamesArray,
+          },
         ])
-        .then((answer) => {
-          let employeeId, managerId;
-          response.forEach((employee) => {
-            if (
-              answer.chosenEmployee === `${employee.first_name} ${employee.last_name}`
-            ) {
-              employeeId = employee.id;
-            }
+        .then((answers) => {
+          const { chosenEmployee, newManager } = answers;
+          const employeeId = rows.find((row) => `${row.first_name} ${row.last_name}` === chosenEmployee).id;
+          const managerId = rows.find((row) => `${row.first_name} ${row.last_name}` === newManager).id;
 
-            if (
-              answer.newManager === `${employee.first_name} ${employee.last_name}`
-            ) {
-              managerId = employee.id;
-            }
-          });
-
-          if (validate.isSame(answer.chosenEmployee, answer.newManager)) {
+          if (employeeId === managerId) {
             console.log(chalk.redBright.bold(`====================================================================================`));
-            console.log(chalk.redBright(`Invalid Manager Selection`));
+            console.log(chalk.redBright(`Invalid Manager Selection: Employee cannot be their own manager`));
             console.log(chalk.redBright.bold(`====================================================================================`));
             promptUser();
           } else {
-            let sql = `UPDATE employee SET employee.manager_id = ? WHERE employee.id = ?`;
+            let sql = 'UPDATE employee SET manager_id = ? WHERE id = ?';
 
-            connection.query(
-              sql,
-              [managerId, employeeId],
-              (error) => {
-                if (error) throw error;
+            connection.promise()
+              .query(sql, [managerId, employeeId])
+              .then(() => {
                 console.log(chalk.greenBright.bold(`====================================================================================`));
                 console.log(chalk.greenBright(`Employee Manager Updated`));
                 console.log(chalk.greenBright.bold(`====================================================================================`));
                 promptUser();
-              }
-            );
+              })
+              .catch((error) => {
+                console.error(`Error updating employee manager: ${error}`);
+                promptUser();
+              });
           }
         });
+    })
+    .catch((error) => {
+      console.error(`Error fetching employee data: ${error}`);
+      promptUser();
     });
 };
+
 
 // -------------------------------------- REMOVE --------------------------------------------------------
 
 // Delete an Employee
 const removeEmployee = () => {
-    let sql =     `SELECT employee.id, employee.first_name, employee.last_name FROM employee`;
+  const sql = 'SELECT employee.id, employee.first_name, employee.last_name FROM employee';
 
-    connection.promise().query(sql, (error, response) => {
-      if (error) throw error;
-      let employeeNamesArray = [];
-      response.forEach((employee) => {employeeNamesArray.push(`${employee.first_name} ${employee.last_name}`);});
+  connection.promise()
+    .query(sql)
+    .then(([rows]) => {
+      const employeeNamesArray = rows.map((employee) => `${employee.first_name} ${employee.last_name}`);
 
       inquirer
         .prompt([
@@ -475,41 +518,41 @@ const removeEmployee = () => {
             name: 'chosenEmployee',
             type: 'list',
             message: 'Which employee would you like to remove?',
-            choices: employeeNamesArray
-          }
+            choices: employeeNamesArray,
+          },
         ])
         .then((answer) => {
-          let employeeId;
+          const chosenEmployeeName = answer.chosenEmployee;
+          const employeeId = rows.find((employee) => `${employee.first_name} ${employee.last_name}` === chosenEmployeeName).id;
 
-          response.forEach((employee) => {
-            if (
-              answer.chosenEmployee ===
-              `${employee.first_name} ${employee.last_name}`
-            ) {
-              employeeId = employee.id;
-            }
-          });
-
-          let sql = `DELETE FROM employee WHERE employee.id = ?`;
-          connection.query(sql, [employeeId], (error) => {
-            if (error) throw error;
-            console.log(chalk.redBright.bold(`====================================================================================`));
-            console.log(chalk.redBright(`Employee Successfully Removed`));
-            console.log(chalk.RedBright.bold(`====================================================================================`));
-            viewAllEmployees();
-          });
+          const deleteSql = 'DELETE FROM employee WHERE id = ?';
+          connection.promise()
+            .query(deleteSql, [employeeId])
+            .then(() => {
+              console.log(chalk.redBright(`Employee Successfully Removed`));
+              viewAllEmployees();
+            })
+            .catch((error) => {
+              console.error(`Error deleting employee: ${error}`);
+              promptUser();
+            });
         });
+    })
+    .catch((error) => {
+      console.error(`Error fetching employee data: ${error}`);
+      promptUser();
     });
-  };
+};
+
 
 // Delete a Role
 const removeRole = () => {
-    let sql = `SELECT role.id, role.title FROM role`;
+  const sql = 'SELECT role.id, role.title FROM role';
 
-    connection.promise().query(sql, (error, response) => {
-      if (error) throw error;
-      let roleNamesArray = [];
-      response.forEach((role) => {roleNamesArray.push(role.title);});
+  connection.promise()
+    .query(sql)
+    .then(([rows]) => {
+      const roleNamesArray = rows.map((role) => role.title);
 
       inquirer
         .prompt([
@@ -517,37 +560,41 @@ const removeRole = () => {
             name: 'chosenRole',
             type: 'list',
             message: 'Which role would you like to remove?',
-            choices: roleNamesArray
-          }
+            choices: roleNamesArray,
+          },
         ])
         .then((answer) => {
-          let roleId;
+          const chosenRoleTitle = answer.chosenRole;
+          const roleId = rows.find((role) => role.title === chosenRoleTitle).id;
 
-          response.forEach((role) => {
-            if (answer.chosenRole === role.title) {
-              roleId = role.id;
-            }
-          });
-
-          let sql =   `DELETE FROM role WHERE role.id = ?`;
-          connection.promise().query(sql, [roleId], (error) => {
-            if (error) throw error;
-            console.log(chalk.redBright.bold(`====================================================================================`));
-            console.log(chalk.greenBright(`Role Successfully Removed`));
-            console.log(chalk.redBright.bold(`====================================================================================`));
-            viewAllRoles();
-          });
+          const deleteSql = 'DELETE FROM role WHERE id = ?';
+          connection.promise()
+            .query(deleteSql, [roleId])
+            .then(() => {
+              console.log(chalk.redBright('Role Successfully Removed'));
+              viewAllRoles();
+            })
+            .catch((error) => {
+              console.error(`Error deleting role: ${error}`);
+              promptUser();
+            });
         });
+    })
+    .catch((error) => {
+      console.error(`Error fetching role data: ${error}`);
+      promptUser();
     });
-  };
+};
+
 
 // Delete a Department
 const removeDepartment = () => {
-    let sql =   `SELECT department.id, department.department_name FROM department`;
-    connection.promise().query(sql, (error, response) => {
-      if (error) throw error;
-      let departmentNamesArray = [];
-      response.forEach((department) => {departmentNamesArray.push(department.department_name);});
+  const sql = 'SELECT department.id, department.department_name FROM department';
+
+  connection.promise()
+    .query(sql)
+    .then(([rows]) => {
+      const departmentNamesArray = rows.map((department) => department.department_name);
 
       inquirer
         .prompt([
@@ -555,29 +602,33 @@ const removeDepartment = () => {
             name: 'chosenDept',
             type: 'list',
             message: 'Which department would you like to remove?',
-            choices: departmentNamesArray
-          }
+            choices: departmentNamesArray,
+          },
         ])
         .then((answer) => {
-          let departmentId;
+          const chosenDepartmentName = answer.chosenDept;
+          const departmentId = rows.find((department) => department.department_name === chosenDepartmentName).id;
 
-          response.forEach((department) => {
-            if (answer.chosenDept === department.department_name) {
-              departmentId = department.id;
-            }
-          });
-
-          let sql =     `DELETE FROM department WHERE department.id = ?`;
-          connection.promise().query(sql, [departmentId], (error) => {
-            if (error) throw error;
-            console.log(chalk.redBright.bold(`====================================================================================`));
-            console.log(chalk.redBright(`Department Successfully Removed`));
-            console.log(chalk.redBright.bold(`====================================================================================`));
-            viewAllDepartments();
-          });
+          const deleteSql = 'DELETE FROM department WHERE id = ?';
+          connection.promise()
+            .query(deleteSql, [departmentId])
+            .then(() => {
+              console.log(chalk.redBright('Department Successfully Removed'));
+              viewAllDepartments();
+            })
+            .catch((error) => {
+              console.error(`Error deleting department: ${error}`);
+              promptUser();
+            });
         });
+    })
+    .catch((error) => {
+      console.error(`Error fetching department data: ${error}`);
+      promptUser();
     });
 };
+
+
 
 // Starts the server to begin listening
 const PORT = process.env.PORT || 8080;
