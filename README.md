@@ -59,5 +59,5 @@ No test at the moment
 # Video Walkthrough 
 
 # Contributing 
-[Andy Lin]([https://www.google.com](https://github.com/andylin03/EmployeeTracker)https://github.com/andylin03/EmployeeTracker)
+[Andy Lin](https://github.com/andylin03/EmployeeTracker)
 # Questions 
