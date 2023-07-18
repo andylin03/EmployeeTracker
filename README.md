@@ -58,6 +58,11 @@ No test at the moment
 
 # Video Walkthrough 
 
+
+
+https://github.com/andylin03/EmployeeTracker/assets/126199540/acf43276-9c33-41bb-95ff-ebcfce53aa89
+
+
 # Contributing 
 [Andy Lin](https://github.com/andylin03/EmployeeTracker)
 # Questions 
