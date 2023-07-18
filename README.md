@@ -61,3 +61,5 @@ No test at the moment
 # Contributing 
 [Andy Lin](https://github.com/andylin03/EmployeeTracker)
 # Questions 
+Contact me directly 
+[Github](https://github.com/andylin03)
